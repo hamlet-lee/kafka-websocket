@@ -74,7 +74,7 @@ public class KafkaConsumer {
         this.topics = topics;
         this.transform = transform;
         this.session = session;
-        if( grepRegex != null) {
+        if( grepRegex != null && !grepRegex.trim().isEmpty()) {
             ptnGrep = Pattern.compile(grepRegex);
         }
         this.limit = limit;
