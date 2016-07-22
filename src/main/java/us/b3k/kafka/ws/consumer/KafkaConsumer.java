@@ -34,6 +34,8 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 public class KafkaConsumer {
     private static Logger LOG = LoggerFactory.getLogger(KafkaConsumer.class);
@@ -45,7 +47,9 @@ public class KafkaConsumer {
     private ConsumerConnector connector;
     private final List<String> topics;
     private final Async remoteEndpoint;
-
+    private Pattern ptnGrep = null;
+    private AtomicInteger consumed = new AtomicInteger();
+    private int limit = 0;
     public KafkaConsumer(Properties configProps, final ExecutorService executorService, final Transform transform, final String topics, final Session session) {
         this.remoteEndpoint = session.getAsyncRemote();
         this.consumerConfig = new ConsumerConfig(configProps);
@@ -55,13 +59,25 @@ public class KafkaConsumer {
         this.session = session;
     }
 
-    public KafkaConsumer(ConsumerConfig consumerConfig, final ExecutorService executorService, final Transform transform, final List<String> topics, final Session session) {
+    public KafkaConsumer(
+        ConsumerConfig consumerConfig,
+        final ExecutorService executorService,
+        final Transform transform,
+        final List<String> topics,
+        final Session session,
+        String grepRegex,
+        int limit
+    ) {
         this.remoteEndpoint = session.getAsyncRemote();
         this.consumerConfig = consumerConfig;
         this.executorService = executorService;
         this.topics = topics;
         this.transform = transform;
         this.session = session;
+        if( grepRegex != null) {
+            ptnGrep = Pattern.compile(grepRegex);
+        }
+        this.limit = limit;
     }
 
     public void start() {
@@ -78,7 +94,7 @@ public class KafkaConsumer {
             LOG.debug("Adding stream for session {}, topic {}",session.getId(), topic);
             final List<KafkaStream<byte[], byte[]>> streams = consumerMap.get(topic);
             for (KafkaStream<byte[], byte[]> stream : streams) {
-                executorService.submit(new KafkaConsumerTask(stream, remoteEndpoint, transform, session));
+                executorService.submit(new KafkaConsumerTask(stream, remoteEndpoint, transform, session, ptnGrep, consumed, limit));
             }
         }
     }
@@ -103,13 +119,21 @@ public class KafkaConsumer {
         private Async remoteEndpoint;
         private final Transform transform;
         private final Session session;
+        private final Pattern ptnGrep;
+        private final AtomicInteger consumed;
+        private final int limit;
 
-        public KafkaConsumerTask(KafkaStream stream, Async remoteEndpoint,
-                                 final Transform transform, final Session session) {
+        public KafkaConsumerTask(
+            KafkaStream stream, Async remoteEndpoint,
+            final Transform transform, final Session session, Pattern ptnGrep, AtomicInteger consumed, int limit
+        ) {
             this.stream = stream;
             this.remoteEndpoint = remoteEndpoint;
             this.transform = transform;
             this.session = session;
+            this.consumed = consumed;
+            this.ptnGrep = ptnGrep;
+            this.limit = limit;
         }
 
         @Override
@@ -119,6 +143,11 @@ public class KafkaConsumer {
             for (MessageAndMetadata<byte[], byte[]> messageAndMetadata : (Iterable<MessageAndMetadata<byte[], byte[]>>) stream) {
                 String topic = messageAndMetadata.topic();
                 byte[] message = messageAndMetadata.message();
+                if( ptnGrep == null || ptnGrep.matcher(new String(message)).find()) {
+                    consumed.incrementAndGet();
+                }else{
+                    continue;
+                }
                 switch(subprotocol) {
                     case "kafka-binary":
                         sendBinary(topic, message);
@@ -126,6 +155,14 @@ public class KafkaConsumer {
                     default:
                         sendText(topic, message);
                         break;
+                }
+                if( limit > 0 && consumed.get() >= limit ) {
+                    try {
+                        session.close();
+                    }
+                    catch (IOException e) {
+                        LOG.error("error", e);
+                    }
                 }
                 if (Thread.currentThread().isInterrupted()) {
                     try {

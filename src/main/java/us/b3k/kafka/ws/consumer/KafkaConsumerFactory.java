@@ -26,11 +26,23 @@ public class KafkaConsumerFactory {
         this.outputTransform = outputTransform;
     }
 
-    public KafkaConsumer getConsumer(String groupId, final String topics, final Session session) {
-        return getConsumer(groupId, Arrays.asList(topics.split(",")), session);
+    public KafkaConsumer getConsumer(
+        String groupId,
+        final String topics,
+        final Session session,
+        String grepRegex,
+        int limit
+    ) {
+        return getConsumer(groupId, Arrays.asList(topics.split(",")), session, grepRegex, limit);
     }
 
-    public KafkaConsumer getConsumer(String groupId, final List<String> topics, final Session session) {
+    public KafkaConsumer getConsumer(
+        String groupId,
+        final List<String> topics,
+        final Session session,
+        String grepRegex,
+        int limit
+    ) {
         if (groupId.isEmpty()) {
             groupId = String.format("%s-%d", session.getId(), System.currentTimeMillis());
             if (configProps.containsKey("group.id")) {
@@ -40,7 +52,7 @@ public class KafkaConsumerFactory {
         Properties sessionProps = (Properties)configProps.clone();
         sessionProps.setProperty("group.id", groupId);
 
-        KafkaConsumer consumer = new KafkaConsumer(new ConsumerConfig(sessionProps), executorService, outputTransform, topics, session);
+        KafkaConsumer consumer = new KafkaConsumer(new ConsumerConfig(sessionProps), executorService, outputTransform, topics, session, grepRegex, limit);
         consumer.start();
         return consumer;
     }

@@ -70,6 +70,8 @@ public class KafkaWebsocketEndpoint {
     public void onOpen(final Session session) {
         String groupId = "";
         String topics = "";
+        String grepRegex = null;
+        int limit = 0;
 
         Map<String, String> queryParams = getQueryMap(session.getQueryString());
         if (queryParams.containsKey("group.id")) {
@@ -79,8 +81,14 @@ public class KafkaWebsocketEndpoint {
         LOG.debug("Opening new session {}", session.getId());
         if (queryParams.containsKey("topics")) {
             topics = queryParams.get("topics");
+            if( queryParams.containsKey("grepRegex") ) {
+                grepRegex = queryParams.get("grepRegex");
+            }
+            if( queryParams.containsKey("limit") ) {
+                limit = Integer.parseInt(queryParams.get("limit"));
+            }
             LOG.debug("Session {} topics are {}", session.getId(), topics);
-            consumer = Configurator.CONSUMER_FACTORY.getConsumer(groupId, topics, session);
+            consumer = Configurator.CONSUMER_FACTORY.getConsumer(groupId, topics, session, grepRegex, limit);
         }
     }
 
