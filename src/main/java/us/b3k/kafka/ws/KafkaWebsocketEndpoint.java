@@ -56,7 +56,7 @@ public class KafkaWebsocketEndpoint {
             String[] params = query.split("&");
             for (String param : params) {
                 String[] nameval = param.split("=");
-                if( nameval.length < 1 ) {
+                if( nameval.length < 2 ) {
                     continue;
                 }
                 try {
