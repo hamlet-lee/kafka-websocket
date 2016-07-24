@@ -56,6 +56,9 @@ public class KafkaWebsocketEndpoint {
             String[] params = query.split("&");
             for (String param : params) {
                 String[] nameval = param.split("=");
+                if( nameval.length < 1 ) {
+                    continue;
+                }
                 try {
                     map.put(nameval[0], URLDecoder.decode(nameval[1], "UTF-8"));
                 }catch(Exception e){
